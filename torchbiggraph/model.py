@@ -285,11 +285,13 @@ class TransHProjection(AbstractOperator):
 
     def __init__(self, dim: int):
         super().__init__(dim)
-        self.hp_norm = nn.Parameter(torch.ones((self.dim,)))
+        self.hp_norm = nn.Embedding(1, self.dim, max_norm=1.0)
+        nn.init.constant_(self.hp_norm.weight.data, val=1)
 
     def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
         match_shape(embeddings, ..., self.dim)
-        proj = embeddings - (self.hp_norm * embeddings).sum(dim=-1, keepdim=True) * self.hp_norm
+        hp_norm = self.hp_norm(torch.LongTensor([0]))[0]
+        proj = embeddings - (hp_norm * embeddings).sum(dim=-1, keepdim=True) * hp_norm
         return proj
 
 
