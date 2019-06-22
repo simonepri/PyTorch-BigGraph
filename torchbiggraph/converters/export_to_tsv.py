@@ -78,6 +78,7 @@ def make_tsv(
                 parameter.flatten() for parameter in operator.parameters()
             ], dim=0))
         for rel_name, operator in zip(relation_types, model.projections):
+            if operator is None: continue
             write(rel_out_file, rel_name, torch.cat([
                 parameter.flatten() for parameter in operator.parameters()
             ], dim=0))
