@@ -281,6 +281,39 @@ class ComplexDiagonalOperator(AbstractOperator):
         return prod
 
 
+class ProjectionRightOperator(AbstractOperator):
+
+    def __init__(self, dim: int):
+        super().__init__(dim)
+        if dim % 2 != 0:
+            raise ValueError("Need even dimension as 1st half is the real "
+                             "embedding and 2nd half is projection vector")
+        self.rproj = nn.Parameter(torch.zeros((self.dim // 2,)))
+
+    def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        emb = embeddings[..., self.dim // 2:]
+        eproj = embeddings[..., :self.dim // 2]
+        proj = torch.zeros_like(embeddings)
+        proj[..., self.dim // 2:] = torch.sum(eproj * self.rproj, dim=-1, keepdim=True) * emb + emb
+        return proj
+
+
+class HalfTranslationRightOperator(AbstractOperator):
+
+    def __init__(self, dim: int):
+        super().__init__(dim)
+        if dim % 2 != 0:
+            raise ValueError("Need even dimension as it will be used on the "
+                             "second half of the embedding")
+        self.ptrans = nn.Parameter(torch.zeros((self.dim // 2,)))
+
+    def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        embeddings[..., self.dim // 2:] = embeddings[..., self.dim // 2:] + self.ptrans
+        return embeddings
+
+
 OPERATORS: Dict[Operator, Type[AbstractOperator]] = {
     Operator.NONE: IdentityOperator,
     Operator.DIAGONAL: DiagonalOperator,
@@ -288,6 +321,8 @@ OPERATORS: Dict[Operator, Type[AbstractOperator]] = {
     Operator.LINEAR: LinearOperator,
     Operator.AFFINE: AffineOperator,
     Operator.COMPLEX_DIAGONAL: ComplexDiagonalOperator,
+    Operator.PROJECTION_RIGHT: ProjectionRightOperator,
+    Operator.HALF_TRANSLATION_RIGHT: HalfTranslationRightOperator,
 }
 
 
@@ -440,6 +475,49 @@ class ComplexDiagonalDynamicOperator(AbstractDynamicOperator):
         return prod
 
 
+class ProjectionRightDynamicOperator(AbstractDynamicOperator):
+
+    def __init__(self, dim: int, num_operations: int):
+        super().__init__(dim, num_operations)
+        if dim % 2 != 0:
+            raise ValueError("Need even dimension as 1st half is the real "
+                             "embedding and 2nd half is projection vector")
+        self.rprojs = nn.Parameter(torch.zeros((self.num_operations, self.dim // 2)))
+
+    def forward(
+        self,
+        embeddings: FloatTensorType,
+        operator_idxs: LongTensorType,
+    ) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        match_shape(operator_idxs, *embeddings.size()[:-1])
+        emb = embeddings[..., self.dim // 2:]
+        eproj = embeddings[..., :self.dim // 2]
+        rproj = self.rprojs[operator_idxs]
+        proj = torch.zeros_like(embeddings)
+        proj[..., self.dim // 2:] = torch.sum(eproj * rproj, dim=-1, keepdim=True) * emb + emb
+        return proj
+
+
+class HalfTranslationRightDynamicOperator(AbstractDynamicOperator):
+
+    def __init__(self, dim: int, num_operations: int):
+        super().__init__(dim, num_operations)
+        if dim % 2 != 0:
+            raise ValueError("Need even dimension")
+        self.ptrans = nn.Parameter(torch.zeros((self.num_operations, self.dim // 2)))
+
+    def forward(
+        self,
+        embeddings: FloatTensorType,
+        operator_idxs: LongTensorType,
+    ) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        match_shape(operator_idxs, *embeddings.size()[:-1])
+        embeddings[..., self.dim // 2:] = embeddings[..., self.dim // 2:] + self.ptrans[operator_idxs]
+        return embeddings
+
+
 DYNAMIC_OPERATORS: Dict[Operator, Type[AbstractDynamicOperator]] = {
     Operator.NONE: IdentityDynamicOperator,
     Operator.DIAGONAL: DiagonalDynamicOperator,
@@ -447,6 +525,8 @@ DYNAMIC_OPERATORS: Dict[Operator, Type[AbstractDynamicOperator]] = {
     Operator.LINEAR: LinearDynamicOperator,
     Operator.AFFINE: AffineDynamicOperator,
     Operator.COMPLEX_DIAGONAL: ComplexDiagonalDynamicOperator,
+    Operator.PROJECTION_RIGHT: ProjectionRightDynamicOperator,
+    Operator.HALF_TRANSLATION_RIGHT: HalfTranslationRightDynamicOperator,
 }
 
 
