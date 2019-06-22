@@ -321,8 +321,8 @@ OPERATORS: Dict[Operator, Type[AbstractOperator]] = {
     Operator.LINEAR: LinearOperator,
     Operator.AFFINE: AffineOperator,
     Operator.COMPLEX_DIAGONAL: ComplexDiagonalOperator,
-    Operator.PROJECTION_RIGHT: ProjectionRightOperator,
-    Operator.HALF_TRANSLATION_RIGHT: HalfTranslationRightOperator,
+    Operator.TRANSD_PROJECTION: ProjectionRightOperator,
+    Operator.TRANSD_TRANSLATION: HalfTranslationRightOperator,
 }
 
 
@@ -525,8 +525,8 @@ DYNAMIC_OPERATORS: Dict[Operator, Type[AbstractDynamicOperator]] = {
     Operator.LINEAR: LinearDynamicOperator,
     Operator.AFFINE: AffineDynamicOperator,
     Operator.COMPLEX_DIAGONAL: ComplexDiagonalDynamicOperator,
-    Operator.PROJECTION_RIGHT: ProjectionRightDynamicOperator,
-    Operator.HALF_TRANSLATION_RIGHT: HalfTranslationRightDynamicOperator,
+    Operator.TRANSD_PROJECTION: ProjectionRightDynamicOperator,
+    Operator.TRANSD_TRANSLATION: HalfTranslationRightDynamicOperator,
 }
 
 

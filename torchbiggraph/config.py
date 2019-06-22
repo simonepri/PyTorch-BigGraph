@@ -45,9 +45,9 @@ class Operator(Enum):
     # multiply them pointwise by another vector of D/2 complex numbers.
     COMPLEX_DIAGONAL = 'complex_diagonal'
     # TODO documentation.
-    PROJECTION_RIGHT = 'transd_projection'
+    TRANSD_PROJECTION = 'transd_projection'
     # TODO documentation.
-    HALF_TRANSLATION_RIGHT = 'transd_translation'
+    TRANSD_TRANSLATION = 'transd_translation'
 
 
 class Comparator(Enum):
