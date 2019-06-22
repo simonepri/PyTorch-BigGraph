@@ -456,7 +456,9 @@ def instantiate_operator(
     num_dynamic_rels: int,
     dim: int,
 ) -> Optional[Union[AbstractOperator, AbstractDynamicOperator]]:
-    if num_dynamic_rels > 0:
+    if side is Side.UNK and operator is Operator.NONE:
+        return None
+    elif num_dynamic_rels > 0:
         try:
             dynamic_operator_class = DYNAMIC_OPERATORS[operator]
         except KeyError:
@@ -681,6 +683,7 @@ class MultiRelationEmbedder(nn.Module):
         entities: Dict[str, EntitySchema],
         num_batch_negs: int,
         num_uniform_negs: int,
+        projections: Sequence[Optional[Union[AbstractOperator, AbstractDynamicOperator]]],
         lhs_operators: Sequence[Optional[Union[AbstractOperator, AbstractDynamicOperator]]],
         rhs_operators: Sequence[Optional[Union[AbstractOperator, AbstractDynamicOperator]]],
         comparator: AbstractComparator,
@@ -697,6 +700,8 @@ class MultiRelationEmbedder(nn.Module):
         self.num_dynamic_rels: int = num_dynamic_rels
         if num_dynamic_rels > 0:
             assert len(relations) == 1
+
+        self.projections: nn.ModuleList = nn.ModuleList(projections)
 
         self.lhs_operators: nn.ModuleList = nn.ModuleList(lhs_operators)
         self.rhs_operators: nn.ModuleList = nn.ModuleList(rhs_operators)
@@ -747,6 +752,7 @@ class MultiRelationEmbedder(nn.Module):
         embs: FloatTensorType,
         rel: Union[int, LongTensorType],
         entity_type: str,
+        projection: Union[None, AbstractOperator, AbstractDynamicOperator],
         operator: Union[None, AbstractOperator, AbstractDynamicOperator],
     ) -> FloatTensorType:
 
@@ -756,14 +762,18 @@ class MultiRelationEmbedder(nn.Module):
                 raise RuntimeError("Cannot have global embs with dynamic rels")
             embs += self.global_embs[self.EMB_PREFIX + entity_type]
 
-        # 2. Apply the relation operator
+        # 2. Apply the relation projection
+        if projection is not None:
+            embs = projection(embs)
+
+        # 3. Apply the relation operator
         if operator is not None:
             if self.num_dynamic_rels > 0:
                 embs = operator(embs, rel)
             else:
                 embs = operator(embs)
 
-        # 3. Prepare for the comparator.
+        # 4. Prepare for the comparator.
         embs = self.comparator.prepare(embs)
 
         return embs
@@ -777,6 +787,7 @@ class MultiRelationEmbedder(nn.Module):
         num_uniform_neg: int,
         rel: Union[int, LongTensorType],
         entity_type: str,
+        projection: Union[None, AbstractOperator, AbstractDynamicOperator],
         operator: Union[None, AbstractOperator, AbstractDynamicOperator],
     ) -> Tuple[FloatTensorType, Mask]:
         """Given some chunked positives, set up chunks of negatives.
@@ -808,7 +819,8 @@ class MultiRelationEmbedder(nn.Module):
                 num_chunks, num_uniform_neg)
             neg_embs = self.adjust_embs(
                 uniform_neg_embs,
-                rel, entity_type, operator,
+                rel, entity_type,
+                projection, operator,
             )
         elif type_ is Negatives.BATCH_UNIFORM:
             neg_embs = pos_embs
@@ -823,7 +835,8 @@ class MultiRelationEmbedder(nn.Module):
                         pos_embs,
                         self.adjust_embs(
                             uniform_neg_embs,
-                            rel, entity_type, operator,
+                            rel, entity_type,
+                            projection, operator,
                         )
                     ], dim=1)
 
@@ -845,7 +858,7 @@ class MultiRelationEmbedder(nn.Module):
             pos_input = pos_input.to_tensor()
             neg_embs = self.adjust_embs(
                 module.get_all_entities().expand(num_chunks, -1, dim),
-                rel, entity_type, operator,
+                rel, entity_type, projection, operator,
             )
 
             if num_uniform_neg > 0:
@@ -928,6 +941,7 @@ class MultiRelationEmbedder(nn.Module):
                 edges.get_relation_type(),
                 relation.lhs,
                 relation.rhs,
+                self.projections[relation_idx],
                 None,
                 self.rhs_operators[relation_idx],
                 lhs_module,
@@ -956,6 +970,10 @@ class MultiRelationEmbedder(nn.Module):
             # and c(g_r(u), v'). This way we only need to perform two operator
             # applications for every positive input edge, one for each side.
 
+            if self.projections[relation_idx] is not None:
+                raise RuntimeError("In dynamic relation mode projections are "
+                                   "not supported")
+
             # "Forward" edges: apply operator to rhs, sample negatives on lhs.
             lhs_pos_scores, lhs_neg_scores, _ = self.forward_direction_agnostic(
                 edges.lhs,
@@ -963,6 +981,7 @@ class MultiRelationEmbedder(nn.Module):
                 edges.get_relation_type(),
                 relation.lhs,
                 relation.rhs,
+                None,
                 None,
                 self.rhs_operators[relation_idx],
                 lhs_module,
@@ -980,6 +999,7 @@ class MultiRelationEmbedder(nn.Module):
                 edges.get_relation_type(),
                 relation.rhs,
                 relation.lhs,
+                None,
                 None,
                 self.lhs_operators[relation_idx],
                 rhs_module,
@@ -1000,6 +1020,7 @@ class MultiRelationEmbedder(nn.Module):
         rel: Union[int, LongTensorType],
         src_entity_type: str,
         dst_entity_type: str,
+        projection: Union[None, AbstractOperator, AbstractDynamicOperator],
         src_operator: Union[None, AbstractOperator, AbstractDynamicOperator],
         dst_operator: Union[None, AbstractOperator, AbstractDynamicOperator],
         src_module: AbstractEmbedding,
@@ -1013,8 +1034,8 @@ class MultiRelationEmbedder(nn.Module):
         num_pos = len(src)
         assert len(dst) == num_pos
 
-        src_pos = self.adjust_embs(src_pos, rel, src_entity_type, src_operator)
-        dst_pos = self.adjust_embs(dst_pos, rel, dst_entity_type, dst_operator)
+        src_pos = self.adjust_embs(src_pos, rel, src_entity_type, projection, src_operator)
+        dst_pos = self.adjust_embs(dst_pos, rel, dst_entity_type, projection, dst_operator)
 
         num_chunks = ceil_of_ratio(num_pos, chunk_size)
         if num_pos < num_chunks * chunk_size:
@@ -1026,10 +1047,10 @@ class MultiRelationEmbedder(nn.Module):
 
         src_neg, src_ignore_mask = self.prepare_negatives(
             src, src_pos, src_module, src_negative_sampling_method,
-            self.num_uniform_negs, rel, src_entity_type, src_operator)
+            self.num_uniform_negs, rel, src_entity_type, projection, src_operator)
         dst_neg, dst_ignore_mask = self.prepare_negatives(
             dst, dst_pos, dst_module, dst_negative_sampling_method,
-            self.num_uniform_negs, rel, dst_entity_type, dst_operator)
+            self.num_uniform_negs, rel, dst_entity_type, projection, dst_operator)
 
         pos_scores, src_neg_scores, dst_neg_scores = \
             self.comparator(src_pos, dst_pos, src_neg, dst_neg)
@@ -1079,9 +1100,12 @@ def make_model(config: ConfigSchema) -> MultiRelationEmbedder:
             (config.batch_size, config.num_batch_negs)
         )
 
+    projections: List[Optional[Union[AbstractOperator, AbstractDynamicOperator]]] = []
     lhs_operators: List[Optional[Union[AbstractOperator, AbstractDynamicOperator]]] = []
     rhs_operators: List[Optional[Union[AbstractOperator, AbstractDynamicOperator]]] = []
     for r in config.relations:
+        projections.append(
+            instantiate_operator(r.projection, Side.UNK, num_dynamic_rels, config.dimension))
         lhs_operators.append(
             instantiate_operator(r.operator, Side.LHS, num_dynamic_rels, config.dimension))
         rhs_operators.append(
@@ -1103,6 +1127,7 @@ def make_model(config: ConfigSchema) -> MultiRelationEmbedder:
         config.entities,
         num_uniform_negs=config.num_uniform_negs,
         num_batch_negs=config.num_batch_negs,
+        projections=projections,
         lhs_operators=lhs_operators,
         rhs_operators=rhs_operators,
         comparator=comparator,

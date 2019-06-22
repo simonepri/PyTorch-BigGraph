@@ -30,6 +30,7 @@ T = TypeVar("T")
 class Side(Enum):
     LHS = 0
     RHS = 1
+    UNK = 2
 
     def pick(self, lhs: T, rhs: T) -> T:
         if self is Side.LHS:

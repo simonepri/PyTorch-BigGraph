@@ -129,6 +129,12 @@ class RelationSchema(Schema):
         metadata={'help': "The weight by which the loss induced by edges of "
                           "this relation type will be multiplied."},
     )
+    projection: Operator = attr.ib(
+        default=Operator.NONE,
+        metadata={'help': "The transformation to apply to the embedding of both "
+                          "sides of the edge before applying the operator on one "
+                          " of the sides of the edge."},
+    )
     operator: Operator = attr.ib(
         default=Operator.NONE,
         metadata={'help': "The transformation to apply to the embedding of one "
