@@ -288,14 +288,16 @@ class ProjectionRightOperator(AbstractOperator):
         if dim % 2 != 0:
             raise ValueError("Need even dimension as 1st half is the real "
                              "embedding and 2nd half is projection vector")
-        self.rproj = nn.Parameter(torch.zeros((self.dim // 2,)))
+        self.rproj = nn.Embedding(1, self.dim // 2)
+        nn.init.constant_(self.ptrans.weight.data, val=1)
 
     def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
         match_shape(embeddings, ..., self.dim)
         emb = embeddings[..., self.dim // 2:]
+        rproj = self.rproj(torch.LongTensor([0]))[0]
         eproj = embeddings[..., :self.dim // 2]
         proj = torch.zeros_like(embeddings)
-        proj[..., self.dim // 2:] = torch.sum(eproj * self.rproj, dim=-1, keepdim=True) * emb + emb
+        proj[..., self.dim // 2:] = torch.sum(eproj * rproj, dim=-1, keepdim=True) * emb + emb
         return proj
 
 
