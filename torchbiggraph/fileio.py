@@ -275,7 +275,7 @@ class Mapping:
 
 
 MODEL_STATE_DICT_MAPPINGS = [
-    Mapping(private="{side}_operators.{idx}.{param}",
+    Mapping(private="{side}_operators.{idx}.{param}.weight",
             public="relations/{idx}/operator/{side}/{param}",
             fields=["idx", "side", "param"]),
     Mapping(private="global_embs.emb_{type}",
