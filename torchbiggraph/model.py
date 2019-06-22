@@ -217,11 +217,12 @@ class TranslationOperator(AbstractOperator):
 
     def __init__(self, dim: int):
         super().__init__(dim)
-        self.translation = nn.Parameter(torch.zeros((self.dim,)))
+        self.translation = nn.Embedding(1, self.dim, max_norm=1.0)
+        nn.init.constant_(self.translation.weight.data, val=0)
 
     def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
         match_shape(embeddings, ..., self.dim)
-        return embeddings + self.translation
+        return embeddings + self.translation(torch.LongTensor([0]))[0]
 
 
 class LinearOperator(AbstractOperator):
