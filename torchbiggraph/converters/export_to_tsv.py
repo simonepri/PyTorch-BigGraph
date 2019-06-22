@@ -77,6 +77,10 @@ def make_tsv(
             write(rel_out_file, rel_name, torch.cat([
                 parameter.flatten() for parameter in operator.parameters()
             ], dim=0))
+        for rel_name, operator in zip(relation_types, model.projections):
+            write(rel_out_file, rel_name, torch.cat([
+                parameter.flatten() for parameter in operator.parameters()
+            ], dim=0))
 
     print("Done exporting relations data to %s" % getattr(rel_out_file, "name", "the output file"))
 
