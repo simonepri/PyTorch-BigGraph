@@ -281,6 +281,18 @@ class ComplexDiagonalOperator(AbstractOperator):
         return prod
 
 
+class TransHProjection(AbstractOperator):
+
+    def __init__(self, dim: int):
+        super().__init__(dim)
+        self.hp_norm = nn.Parameter(torch.ones((self.dim,)))
+
+    def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        proj = embeddings - (self.hp_norm * embeddings).sum(dim=-1, keepdim=True) * self.hp_norm
+        return proj
+
+
 OPERATORS: Dict[Operator, Type[AbstractOperator]] = {
     Operator.NONE: IdentityOperator,
     Operator.DIAGONAL: DiagonalOperator,
@@ -288,6 +300,7 @@ OPERATORS: Dict[Operator, Type[AbstractOperator]] = {
     Operator.LINEAR: LinearOperator,
     Operator.AFFINE: AffineOperator,
     Operator.COMPLEX_DIAGONAL: ComplexDiagonalOperator,
+    Operator.TRANSH_PROJECTION: TransHProjection,
 }
 
 
@@ -440,6 +453,24 @@ class ComplexDiagonalDynamicOperator(AbstractDynamicOperator):
         return prod
 
 
+class TransHDynamicProjection(AbstractOperator):
+
+    def __init__(self, dim: int, num_operations: int):
+        super().__init__(dim, num_operations)
+        self.hp_norms = nn.utils.clip_grad_norm_(nn.Parameter(torch.ones((self.num_operations, self.dim))), 1.0)
+
+    def forward(
+        self,
+        embeddings: FloatTensorType,
+        operator_idxs: LongTensorType,
+    ) -> FloatTensorType:
+        match_shape(embeddings, ..., self.dim)
+        match_shape(operator_idxs, *embeddings.size()[:-1])
+        hp_norm = self.hp_norms[operator_idxs]
+        proj = (hp_norm * embeddings).sum(dim=-1, keepdim=True) * hp_norm
+        return proj
+
+
 DYNAMIC_OPERATORS: Dict[Operator, Type[AbstractDynamicOperator]] = {
     Operator.NONE: IdentityDynamicOperator,
     Operator.DIAGONAL: DiagonalDynamicOperator,
@@ -447,6 +478,7 @@ DYNAMIC_OPERATORS: Dict[Operator, Type[AbstractDynamicOperator]] = {
     Operator.LINEAR: LinearDynamicOperator,
     Operator.AFFINE: AffineDynamicOperator,
     Operator.COMPLEX_DIAGONAL: ComplexDiagonalDynamicOperator,
+    Operator.TRANSH_PROJECTION: TransHDynamicProjection,
 }
 
 

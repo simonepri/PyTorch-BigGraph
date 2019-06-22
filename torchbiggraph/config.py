@@ -44,6 +44,8 @@ class Operator(Enum):
     # vector is their real parts, the second half their imaginary parts) and
     # multiply them pointwise by another vector of D/2 complex numbers.
     COMPLEX_DIAGONAL = 'complex_diagonal'
+    # TransH projection.
+    TRANSH_PROJECTION = 'transh_projection'
 
 
 class Comparator(Enum):
