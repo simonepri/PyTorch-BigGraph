@@ -306,11 +306,13 @@ class HalfTranslationRightOperator(AbstractOperator):
         if dim % 2 != 0:
             raise ValueError("Need even dimension as it will be used on the "
                              "second half of the embedding")
-        self.ptrans = nn.Parameter(torch.zeros((self.dim // 2,)))
+        self.ptrans = nn.Embedding(1, self.dim // 2, max_norm=1.0)
+        nn.init.constant_(self.ptrans.weight.data, val=0)
 
     def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
         match_shape(embeddings, ..., self.dim)
-        embeddings[..., self.dim // 2:] = embeddings[..., self.dim // 2:] + self.ptrans
+        ptrans = self.ptrans(torch.LongTensor([0]))[0]
+        embeddings[..., self.dim // 2:] = embeddings[..., self.dim // 2:] + ptrans
         return embeddings
 
 
