@@ -24,7 +24,8 @@ def make_tsv(
     checkpoint: str,
     relation_types: List[str],
     entities_by_type: Dict[str, List[str]],
-    output_file: IO[str],
+    ent_out_file: IO[str],
+    rel_out_file: IO[str],
 ) -> None:
     print("Loading model check point...")
     checkpoint_manager = CheckpointManager(checkpoint)
@@ -46,12 +47,14 @@ def make_tsv(
                 embs += model.global_embs[model.EMB_PREFIX + entity_name]
 
             for ix in range(len(embs)):
-                write(output_file, entities[part_begin + ix], embs[ix])
+                write(ent_out_file, entities[part_begin + ix], embs[ix])
                 if (ix + 1) % 5000 == 0:
                     print("- Processed %d entities so far..." % (ix + 1))
             print("- Processed %d entities in total" % len(embs))
 
             part_begin = part_begin + len(embs)
+
+    print("Done exporting entities data to %s" % getattr(ent_out_file, "name", "the output file"))
 
     # TODO Provide a better output format for relation parameters.
     print("Writing relation parameters...")
@@ -61,28 +64,29 @@ def make_tsv(
             for parameter in model.lhs_operators[0].parameters()
         ], dim=1)
         for rel_idx, rel_name in enumerate(relation_types):
-            write(output_file, rel_name, lhs_parameters[rel_idx])
+            write(rel_out_file, rel_name, lhs_parameters[rel_idx])
 
         rhs_parameters = torch.cat([
             parameter.view(model.num_dynamic_rels, -1)
             for parameter in model.rhs_operators[0].parameters()
         ], dim=1)
         for rel_idx, rel_name in enumerate(relation_types):
-            write(output_file, rel_name + "_reverse_relation", rhs_parameters[rel_idx])
+            write(rel_out_file, rel_name + "_reverse_relation", rhs_parameters[rel_idx])
     else:
         for rel_name, operator in zip(relation_types, model.rhs_operators):
-            write(output_file, rel_name, torch.cat([
+            write(rel_out_file, rel_name, torch.cat([
                 parameter.flatten() for parameter in operator.parameters()
             ], dim=0))
 
-    print("Done exporting data to %s" % getattr(output_file, "name", "the output file"))
+    print("Done exporting relations data to %s" % getattr(rel_out_file, "name", "the output file"))
 
 
 def main():
     parser = argparse.ArgumentParser(description='Convert Data for PBG')
     parser.add_argument('--checkpoint')
     parser.add_argument('--dict', required=True)
-    parser.add_argument('--out', required=True)
+    parser.add_argument('--out-ent', required=True)
+    parser.add_argument('--out-rel', required=True)
 
     args = parser.parse_args()
 
@@ -90,8 +94,8 @@ def main():
     with open(args.dict, "rt") as tf:
         dump = json.load(tf)
 
-    with open(args.out, "wt") as out_tf:
-        make_tsv(args.checkpoint, dump["relations"], dump["entities"], out_tf)
+    with open(args.out_ent, "wt") as ent_out_tf, open(args.out_rel, "wt") as ent_out_tf:
+        make_tsv(args.checkpoint, dump["relations"], dump["entities"], ent_out_tf, ent_out_tf)
 
 
 if __name__ == "__main__":
