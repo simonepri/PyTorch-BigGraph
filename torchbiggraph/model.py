@@ -289,7 +289,7 @@ class ProjectionRightOperator(AbstractOperator):
             raise ValueError("Need even dimension as 1st half is the real "
                              "embedding and 2nd half is projection vector")
         self.rproj = nn.Embedding(1, self.dim // 2)
-        nn.init.constant_(self.ptrans.weight.data, val=1)
+        nn.init.constant_(self.rproj.weight.data, val=1)
 
     def forward(self, embeddings: FloatTensorType) -> FloatTensorType:
         match_shape(embeddings, ..., self.dim)
